@@ -6,6 +6,7 @@ package com.sik.latlwm.service;
 public class EmailServiceImpl implements EmailService {
 
 	public boolean notify(String email, String subject, String text ) {
+		//TODO
 		return true;
 	}
 
