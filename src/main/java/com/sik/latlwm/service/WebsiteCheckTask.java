@@ -1,9 +1,8 @@
 package com.sik.latlwm.service;
 
-import com.crossedstreams.desktop.website.ExpectationChecker;
-import com.crossedstreams.desktop.website.UrlDefinition;
-import com.crossedstreams.desktop.website.UrlGroup;
-import com.crossedstreams.desktop.website.WebsiteCheck;
+import com.crossedstreams.desktop.website.*;
+import com.sik.latlwm.core.UserCallback;
+import com.sik.latlwm.core.UserSiteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,30 +16,18 @@ import java.util.Collection;
 public class WebsiteCheckTask implements Runnable {
 	private static final Logger LOG = LoggerFactory.getLogger(WebsiteCheckTask.class);
 
-	private UrlGroup urlGroup;
-	private WebsiteCheck checker;
-	@Autowired
-	private ExpectationChecker expectationChecker;
-	@Autowired
-	private EmailService emailService;
+	private UserSiteService userSite;
 
-	ExpectationChecker.ExpectationResult
-
-	private ExpectationChecker.Callback callback;
-
-	public WebsiteCheckTask(WebsiteCheck checker, UrlGroup urlGroup) {
-		this.checker = checker;
-		this.urlGroup = urlGroup;
+	public WebsiteCheckTask(UserSiteService userSite) {
+		super();
+		this.userSite = userSite;
 	}
 
 	public void run() {
-		this.checkGroup();
-	}
-
-	public void checkGroup() {
-		for(UrlDefinition url: urlGroup.getUrlDefinitions()) {
-				expectationChecker.check(url,callback);
-			}
+		for(UrlDefinition url: userSite.getGroup().getUrlDefinitions()) {
+			LOG.info("Checking: " + url);
+			new JavaURLBasedExpectationChecker().check(url,new UserCallback(userSite));
 		}
 	}
+
 }

@@ -7,5 +7,5 @@ import com.crossedstreams.desktop.website.UrlDefinition;
  * Created by hisg401 on 16/05/2017.
  */
 public interface EmailService {
-	boolean notify(String emailAddress, UrlDefinition urlDefinition, ExpectationChecker.DefaultExpectationResult)
+	boolean notify(String emailAddress, String subject, String text);
 }

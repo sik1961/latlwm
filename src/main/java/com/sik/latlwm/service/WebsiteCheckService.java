@@ -1,12 +1,15 @@
 package com.sik.latlwm.service;
 
 import com.crossedstreams.desktop.website.*;
+import com.sik.latlwm.core.UserSiteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.concurrent.*;
 //import java.util.logging.Logger;
 
@@ -15,64 +18,88 @@ import java.util.concurrent.*;
  */
 public class WebsiteCheckService {
 
+	private static final long INTERVAL_MILLIS = 1000L * 60 * 15;
+	private static final long MINUTE_MILLIS = 1000L * 60;
 	private static final Logger LOG = LoggerFactory.getLogger(WebsiteCheckService.class);
 
-	private Collection<UrlGroup> urlGroups;
-	private WebsiteCheck checker;
 	@Autowired
-	private UrlGroupService groupService;
-	@Autowired
-	private ExpectationChecker expectationChecker;
-	@Autowired
-	private EmailService emailService;
+	private UserSiteServiceService groupService;
 
-	ExpectationChecker.ExpectationResult
+	private ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
 
-	private ExpectationChecker.Callback callback = new ExpectationChecker.Callback() {
-		public void onResult(ExpectationChecker.ExpectationResult expectationResult, UrlDefinition urlDefinition) {
-			if(expectationResult.isMet()) {
-				LOG.info("   OK :- " + urlDefinition.toString());
-			} else {
-				LOG.info("ERROR :- " + urlDefinition.toString() + " - " + expectationResult.toString());
-				emailService.notify();
-			}
+
+	public WebsiteCheckService() {}
+
+	@Scheduled(initialDelay = MINUTE_MILLIS, fixedDelay = MINUTE_MILLIS)
+	public void startTasks() {
+
+		long startTime = System.currentTimeMillis();
+		LOG.info("Starting tasks at: " + new Date());
+
+		Collection<Future> tasks = new ArrayList<Future>();
+
+		/**
+		 * Submit tasks
+		 */
+		for (UserSiteService site: groupService.getGroups()) {
+			tasks.add(executor.submit(new WebsiteCheckTask(site)));
 		}
-	};
 
-	public WebsiteCheckService(WebsiteCheck checker) {
-		this.checker = checker;
-	}
-
-	//@Scheduled(initialDelay = 1000L * 60, fixedDelay = 1000L * 60 * 10)
-	public void startTask() {
-
-		ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
-		Task task1 = new Task ("Demo Task 1");
-		Task task2 = new Task ("Demo Task 2");
-
-		System.out.println("The time is : " + new Date());
-
-		executor.schedule(task1, 5 , TimeUnit.SECONDS);
-		executor.schedule(task2, 10 , TimeUnit.SECONDS);
-
+		/**
+		 * Monitor tasks
+		 */
 		try {
-			executor.awaitTermination(1, TimeUnit.DAYS);
+			do {
+				Thread.sleep(MINUTE_MILLIS);
+				if (!isTasksActive(tasks)) {
+					break;
+				}
+			} while(System.currentTimeMillis() < startTime + (INTERVAL_MILLIS - MINUTE_MILLIS));
 		} catch (InterruptedException e) {
-			e.printStackTrace();
+			LOG.error("Awaiting tasks interrupted");
 		}
 
+		/**
+		 * End tasks
+		 */
+		try {
+			if (isTasksActive(tasks)) {
+				LOG.info("Issuing cancel for remaining tasks");
+				cancelTasks(tasks);
+				Thread.sleep(MINUTE_MILLIS);
+			}
+		} catch (InterruptedException e) {
+			LOG.error("Awaiting cancel interrupted");
+		}
+
+		LOG.info("Issuing executor shutdown at: " + new Date());
 		executor.shutdown();
 
+		long endTime = System.currentTimeMillis();
+		LOG.info("Tasks complete: " + isTasksActive(tasks) + " in " + (endTime - startTime) + "ms");
+	}
 
-
-
-		this.checker = new WebsiteCheck(groupService.getGroups(), expectationChecker);
-		for (UrlGroup group: groupService.getGroups()) {
-			for(UrlDefinition url: group.getUrlDefinitions()) {
-				expectationChecker.check(url,callback);
-				if (callback.)
+	private boolean isTasksActive(Collection<Future> tasks) {
+		int activeCount = 0;
+		for (Future t:tasks) {
+			LOG.debug("Task: " + t + " done=" + t.isDone() + " canc=" + t.isCancelled());
+			if (!t.isDone()) {
+				activeCount++;
+			} else {
+				tasks.remove(t);
 			}
-		};
+		}
+		LOG.info(activeCount + " active tasks!");
+		return activeCount > 0;
+	}
+
+	private void cancelTasks(Collection<Future> tasks) {
+		for (Future t:tasks) {
+			if (!t.isDone()) {
+				LOG.info("Cancelling:" + t.toString());
+				t.cancel(true);
+			}
+		}
 	}
 
 }
